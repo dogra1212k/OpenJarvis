@@ -1,0 +1,38 @@
+# Hindi JARVIS — lightweight personal assistant preset
+# Designed for low-resource machines and Android/Termux-style remote use.
+#
+# Usage:
+#   jarvis init --preset hindi-jarvis --force
+#   jarvis chat
+#   jarvis serve
+#
+# Notes:
+# - OpenJarvis itself is primarily a desktop/server Python stack.
+# - On Android, the most reliable setup is to run the server on Linux/WSL/PC
+#   and access it from the phone browser, or experiment via Termux where supported.
+
+[engine]
+default = "ollama"
+
+[intelligence]
+default_model = "qwen3.5:4b"
+temperature = 0.4
+max_tokens = 1024
+top_p = 0.9
+
+[agent]
+default_agent = "simple"
+objective = "Act as a fast, helpful personal AI assistant. Prefer Hindi when the user speaks Hindi or Hinglish."
+
+[tools.storage]
+default_backend = "sqlite"
+db_path = "~/.openjarvis/memory.db"
+
+[traces]
+enabled = true
+db_path = "~/.openjarvis/traces.db"
+
+[server]
+host = "127.0.0.1"
+port = 8000
+agent = "simple"
