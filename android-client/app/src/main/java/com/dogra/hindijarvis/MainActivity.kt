@@ -87,7 +87,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
 
         statusText = TextView(this).apply {
-            text = "● ONLINE • Offline commands ready"
+            text = "● PHONE MODE • Basic commands ready"
             setTextColor(CYAN)
             textSize = 13f
             setPadding(12, 10, 12, 10)
@@ -137,7 +137,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 statusText.text = if (checked)
                     "● ADVANCED AI • Server required"
                 else
-                    "● ONLINE • Offline commands ready"
+                    "● PHONE MODE • Basic commands ready"
             }
         }
         toggles.addView(speakToggle, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
@@ -204,7 +204,16 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     private fun loadSettings() {
-        serverUrl.setText(prefs.getString("server_url", ""))
+        val savedUrl = prefs.getString("server_url", "").orEmpty()
+        val host = runCatching { Uri.parse(savedUrl).host }.getOrNull()
+        val emulator = android.os.Build.FINGERPRINT.contains("generic") ||
+            android.os.Build.MODEL.contains("Emulator")
+        if (host == "10.0.2.2" && !emulator) {
+            prefs.edit().remove("server_url").apply()
+            serverUrl.setText("")
+        } else {
+            serverUrl.setText(savedUrl)
+        }
         apiKey.setText(prefs.getString("api_key", ""))
         modelName.setText(prefs.getString("model", "qwen3.5:4b"))
     }
@@ -233,7 +242,15 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
 
         val url = serverUrl.text.toString().trim()
-        if (url.isBlank()) {
+        val parsed = runCatching { Uri.parse(url) }.getOrNull()
+        val emulator = android.os.Build.FINGERPRINT.contains("generic") ||
+            android.os.Build.MODEL.contains("Emulator")
+        if (parsed?.host == "10.0.2.2" && !emulator) {
+            appendChat("JARVIS: 10.0.2.2 केवल emulator पर चलता है। अपने चालू OpenJarvis server का LAN IP या HTTPS URL डालें।")
+            return
+        }
+        if (url.isBlank() || parsed?.host.isNullOrBlank() ||
+            parsed?.scheme !in listOf("http", "https")) {
             val reply = "Advanced AI के लिए server URL चाहिए। अभी Offline mode इस्तेमाल करें।"
             appendChat("JARVIS: $reply")
             if (speakToggle.isChecked) speak(reply)
@@ -392,7 +409,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                         userInput.setText(text)
                         sendMessage()
                     }
-                    statusText.text = if (advancedToggle.isChecked) "● ADVANCED AI" else "● ONLINE • Offline commands ready"
+                    statusText.text = if (advancedToggle.isChecked) "● ADVANCED AI" else "● PHONE MODE • Basic commands ready"
                 }
                 override fun onPartialResults(partialResults: Bundle?) {}
                 override fun onEvent(eventType: Int, params: Bundle?) {}
