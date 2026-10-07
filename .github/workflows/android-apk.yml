@@ -1,40 +1,58 @@
 name: Build Hindi JARVIS APK
-
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
       - "android-client/**"
       - ".github/workflows/android-apk.yml"
-
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: android-client
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Java
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - uses: android-actions/setup-android@v3
+      - name: Install Android native build tools
+        run: sdkmanager "ndk;28.2.13676358" "cmake;3.22.1" "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
-
-      - name: Build debug APK
+      - name: Download and verify bundled offline model
+        run: |
+          mkdir -p app/src/main/assets
+          curl --fail --location --retry 3 --output app/src/main/assets/offline-model.gguf https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_0.gguf
+          echo "7671c0c304e6ce5a7fc577bcb12aba01e2c155cc2efd29b2213c95b18edaf6ed  app/src/main/assets/offline-model.gguf" | sha256sum -c -
+      - name: Build and test the actual offline engine
+        run: |
+          set -o pipefail
+          cmake -S app/src/main/cpp -B host-test -DCMAKE_BUILD_TYPE=Release
+          cmake --build host-test --target offline_smoke -j 4
+          host-test/offline_smoke app/src/main/assets/offline-model.gguf | tee offline-smoke.txt
+      - name: Build offline APK
         run: gradle :app:assembleDebug --stacktrace
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - name: Verify bundled model and native runtime
+        run: |
+          python3 - <<'PY'
+          import zipfile
+          with zipfile.ZipFile('app/build/outputs/apk/debug/app-debug.apk') as z:
+              assert 'assets/offline-model.gguf' in z.namelist()
+              assert 'lib/arm64-v8a/libjarvis_offline.so' in z.namelist()
+          PY
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify app/build/outputs/apk/debug/app-debug.apk
+      - uses: actions/upload-artifact@v4
         with:
-          name: hindi-jarvis-debug-apk
+          name: JARVIS-Offline-AI-APK
           path: android-client/app/build/outputs/apk/debug/app-debug.apk
+          compression-level: 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: offline-engine-test-results
+          path: android-client/offline-smoke.txt
