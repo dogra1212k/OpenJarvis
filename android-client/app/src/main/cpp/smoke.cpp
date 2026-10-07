@@ -1,13 +1,17 @@
 #include "engine.h"
 #include <iostream>
 #include <stdexcept>
+#include <algorithm>
+#include <cctype>
 int main(int argc, char **argv) {
     if (argc != 2) return 2;
     try {
         OfflineEngine engine(argv[1]);
         auto english = engine.generate("<|im_start|>system\nYou are a helpful assistant. Give a short answer.<|im_end|>\n<|im_start|>user\nWhat is two plus two?<|im_end|>\n<|im_start|>assistant\n", [](const std::string &) {});
         std::cout << "ENGLISH: " << english << '\n';
-        if (english.find('4') == std::string::npos && english.find("four") == std::string::npos) throw std::runtime_error("Arithmetic smoke test failed");
+        auto normalized = english;
+        std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char c) { return std::tolower(c); });
+        if (normalized.find('4') == std::string::npos && normalized.find("four") == std::string::npos) throw std::runtime_error("Arithmetic smoke test failed");
         auto hindi = engine.generate("<|im_start|>system\nYou are JARVIS. Reply briefly in Hindi.<|im_end|>\n<|im_start|>user\nनमस्ते, आप कैसे हैं?<|im_end|>\n<|im_start|>assistant\n", [](const std::string &) {});
         std::cout << "HINDI: " << hindi << '\n';
         if (hindi.empty()) throw std::runtime_error("Empty Hindi reply");
