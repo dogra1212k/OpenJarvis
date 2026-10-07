@@ -11,7 +11,7 @@ OfflineEngine::OfflineEngine(const std::string &path) {
     llama_backend_init();
     auto params = llama_model_default_params();
     params.n_gpu_layers = 0;
-    params.use_mmap = true;
+    params.load_mode = LLAMA_LOAD_MODE_MMAP;
     model_ = llama_model_load_from_file(path.c_str(), params);
     if (!model_) throw std::runtime_error("Offline model could not load. Restart the app and free some RAM.");
 }
