@@ -2,7 +2,7 @@ name: Build Hindi JARVIS APK
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, jarvis-logo-design-final]
     paths:
       - "android-client/**"
       - ".github/workflows/android-apk.yml"
