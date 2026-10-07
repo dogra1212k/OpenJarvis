@@ -4,6 +4,10 @@ import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Build
@@ -26,6 +30,7 @@ import java.util.concurrent.Executors
 class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private lateinit var status: TextView
     private lateinit var chat: TextView
+    private lateinit var chatContent: LinearLayout
     private lateinit var scroll: ScrollView
     private lateinit var input: EditText
     private lateinit var send: Button
@@ -70,7 +75,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(12), dp(16), dp(12))
-            setBackgroundColor(BG)
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF102738.toInt(), BG, 0xFF070F1C.toInt()))
             setOnApplyWindowInsetsListener { view, insets ->
                 view.setPadding(dp(16) + insets.systemWindowInsetLeft,
                     dp(12) + insets.systemWindowInsetTop,
@@ -79,70 +85,123 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 insets
             }
         }
-        root.addView(TextView(this).apply {
-            text = "J.A.R.V.I.S • OFFLINE AI"
-            textSize = 24f
-            setTextColor(CYAN)
-            setTypeface(typeface, Typeface.BOLD)
-            gravity = Gravity.CENTER
+        val header = LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(6), 0, dp(16))
+        }
+        val logo = ImageView(this).apply {
+            contentDescription = "JARVIS J logo"
+            background = surface(0xFF081421.toInt(), 22)
+            clipToOutline = true
+            runCatching { LogoRenderer().bitmap() }
+                .onSuccess { setImageBitmap(it) }
+                .onFailure { setImageResource(R.drawable.j_logo) }
+        }
+        header.addView(logo, LinearLayout.LayoutParams(dp(68), dp(68)))
+        val branding = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), 0, 0, 0)
+        }
+        branding.addView(TextView(this).apply {
+            text = "JARVIS"
+            textSize = 28f
+            letterSpacing = 0.12f
+            setTextColor(TEXT)
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
         })
-        root.addView(TextView(this).apply {
-            text = "AI आपके फोन पर • कोई server URL या API key नहीं"
-            textSize = 12f
+        branding.addView(TextView(this).apply {
+            text = "आपका निजी AI assistant"
+            textSize = 13f
             setTextColor(MUTED)
-            gravity = Gravity.CENTER
-            setPadding(0, dp(4), 0, dp(8))
+            setPadding(0, dp(2), 0, 0)
         })
+        header.addView(branding, LinearLayout.LayoutParams(0, -2, 1f))
+        root.addView(header)
         status = TextView(this).apply {
             text = "पहली बार: offline model तैयार हो रहा है…"
             setTextColor(CYAN)
-            setPadding(dp(10), dp(8), dp(10), dp(8))
-            setBackgroundColor(PANEL)
+            textSize = 12f
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+            background = surface(PANEL, 16, 0xFF214653.toInt())
         }
         root.addView(status)
         chat = TextView(this).apply {
             setTextColor(TEXT)
-            textSize = 17f
-            setPadding(dp(12), dp(12), dp(12), dp(12))
+            textSize = 16f
+            setPadding(dp(18), dp(18), dp(18), dp(18))
             setTextIsSelectable(true)
-            setBackgroundColor(PANEL)
+            background = surface(PANEL, 22, 0xFF1D394B.toInt())
         }
-        scroll = ScrollView(this).apply { addView(chat) }
+        chatContent = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        scroll = ScrollView(this).apply {
+            addView(chatContent)
+            isFillViewport = true
+            isVerticalScrollBarEnabled = false
+        }
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f).apply {
             setMargins(0, dp(10), 0, dp(10))
         })
         input = EditText(this).apply {
-            hint = "कुछ पूछिए…"
+            hint = "JARVIS से पूछिए…"
             setHintTextColor(MUTED)
             setTextColor(TEXT)
             textSize = 17f
             minLines = 1
             maxLines = 3
-            setPadding(dp(12), dp(10), dp(12), dp(10))
-            setBackgroundColor(PANEL)
+            setPadding(dp(16), dp(14), dp(16), dp(14))
+            background = surface(PANEL, 20, 0xFF285468.toInt())
         }
         root.addView(input)
         speakToggle = CheckBox(this).apply {
-            text = "आवाज़ में जवाब (फोन का voice pack)"
+            text = "आवाज़ में जवाब"
             setTextColor(TEXT)
+            textSize = 13f
+            buttonTintList = ColorStateList(arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
+                intArrayOf(CYAN, MUTED))
             isChecked = true
         }
         root.addView(speakToggle)
         val row = LinearLayout(this)
         mic = Button(this).apply { text = "MIC"; setOnClickListener { startListening() } }
-        send = Button(this).apply { text = "SEND"; setOnClickListener { sendMessage() } }
-        stop = Button(this).apply { text = "STOP"; setOnClickListener { ai?.setCancelled(true) } }
+        send = Button(this).apply { text = "भेजें"; setOnClickListener { sendMessage() } }
+        stop = Button(this).apply { text = "रोकें"; setOnClickListener { ai?.setCancelled(true) } }
         clear = Button(this).apply {
-            text = "CLEAR"
+            text = "नई चैट"
             setOnClickListener { history.clear(); streaming = ""; renderChat() }
         }
         listOf(mic, send, stop, clear).forEach {
-            row.addView(it, LinearLayout.LayoutParams(0, -2, 1f))
+            it.isAllCaps = false
+            it.textSize = 13f
+            it.minWidth = 0
+            it.setPadding(dp(4), 0, dp(4), 0)
+            it.setTextColor(if (it == send) BG else TEXT)
+            it.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            val fill = if (it == send) GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF62F0E8.toInt(), CYAN)).apply { cornerRadius = dp(18).toFloat() }
+                else surface(PANEL, 18, 0xFF254353.toInt())
+            it.background = RippleDrawable(ColorStateList.valueOf(0x4438E8FF), fill, null)
+            row.addView(it, LinearLayout.LayoutParams(0, dp(48), 1f).apply {
+                setMargins(dp(3), dp(2), dp(3), dp(4))
+            })
         }
         root.addView(row)
+        root.addView(TextView(this).apply {
+            text = "OFFLINE • छोटे मॉडल की हिन्दी सीमित है"
+            textSize = 10f
+            setTextColor(MUTED)
+            gravity = Gravity.CENTER
+            setPadding(0, dp(8), 0, 0)
+        })
         renderChat()
         return root
     }
+
+    private fun surface(color: Int, radius: Int, border: Int = Color.TRANSPARENT) =
+        GradientDrawable().apply {
+            setColor(color)
+            cornerRadius = dp(radius).toFloat()
+            if (border != Color.TRANSPARENT) setStroke(dp(1), border)
+        }
 
     private fun ui(action: () -> Unit) {
         runOnUiThread { if (!isFinishing && !isDestroyed) action() }
@@ -156,6 +215,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         clear.isEnabled = !value
         mic.isEnabled = ready && !value && localSpeechAvailable
         stop.isEnabled = ready && value
+        listOf(send, input, clear, mic, stop).forEach { it.alpha = if (it.isEnabled) 1f else 0.4f }
         if (value) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
@@ -216,13 +276,45 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     private fun renderChat() {
-        val welcome = "JARVIS: नमस्ते! अब मैं फोन पर AI मॉडल से जवाब दूँगा।\nयह छोटा test मॉडल है; हिन्दी और तथ्य वाले जवाबों में गलतियाँ हो सकती हैं।\n\nपूछिए: ‘आप कैसे हैं?’ या ‘दो और दो कितने होते हैं?’\n"
-        chat.text = buildString {
-            append(welcome)
-            history.forEach { (role, text) -> append("\n\n${if (role == "user") "आप" else "JARVIS"}: $text") }
-            if (streaming.isNotEmpty()) append("\n\nJARVIS: $streaming")
+        chatContent.removeAllViews()
+        if (history.isEmpty()) {
+            chat.text = "नमस्ते, मैं JARVIS हूँ।\n\nसवाल पूछिए, कोई idea समझिए या नई बातचीत शुरू कीजिए।\n\nछोटा offline मॉडल • शुरुआत English में करें।\nकोई server URL या API key नहीं चाहिए।"
+            chatContent.addView(chat)
         }
+        history.forEach { (role, text) -> addBubble(role, text) }
+        if (streaming.isNotEmpty()) addBubble("assistant", streaming)
         scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+    }
+
+    private fun addBubble(role: String, message: String) {
+        val user = role == "user"
+        val wrapper = FrameLayout(this)
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(15), dp(12), dp(15), dp(14))
+            background = surface(if (user) 0xFF163E52.toInt() else PANEL, 20,
+                if (user) 0xFF265E76.toInt() else 0xFF1D3547.toInt())
+        }
+        content.addView(TextView(this).apply {
+            text = if (user) "आप" else "JARVIS"
+            textSize = 10f
+            setTextColor(if (user) MUTED else CYAN)
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            setPadding(0, 0, 0, dp(7))
+        })
+        content.addView(TextView(this).apply {
+            text = message
+            setTextColor(TEXT)
+            textSize = 16f
+            setLineSpacing(dp(3).toFloat(), 1f)
+            setTextIsSelectable(true)
+        })
+        val width = ((resources.displayMetrics.widthPixels - dp(32)) * 0.89f).toInt()
+        wrapper.addView(content, FrameLayout.LayoutParams(width, -2,
+            if (user) Gravity.END else Gravity.START))
+        chatContent.addView(wrapper, LinearLayout.LayoutParams(-1, -2).apply {
+            setMargins(0, dp(5), 0, dp(7))
+        })
     }
 
     private fun sendMessage() {

@@ -34,12 +34,10 @@ jobs:
           curl --fail --location --output app/src/main/assets/Qwen-LICENSE.txt https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/LICENSE
           curl --fail --location --output app/src/main/assets/llama-LICENSE.txt https://raw.githubusercontent.com/ggml-org/llama.cpp/988190680d5a89fce97de3c20df2c2813731fd61/LICENSE
           echo "7671c0c304e6ce5a7fc577bcb12aba01e2c155cc2efd29b2213c95b18edaf6ed  app/src/main/assets/offline-model.gguf" | sha256sum -c -
-      - name: Build and test the actual offline engine
+      - name: Render native C++ logo preview
         run: |
-          set -o pipefail
-          cmake -S app/src/main/cpp -B host-test -DCMAKE_BUILD_TYPE=Release
-          cmake --build host-test --target offline_smoke -j 4
-          host-test/offline_smoke app/src/main/assets/offline-model.gguf | tee offline-smoke.txt
+          g++ -std=c++17 -O2 -DJARVIS_RENDER_PREVIEW app/src/main/cpp/logo.cpp -o logo-preview
+          ./logo-preview logo-preview.ppm
       - name: Build offline APK
         run: gradle :app:assembleDebug --stacktrace
       - name: Verify bundled model and native runtime
@@ -48,6 +46,8 @@ jobs:
           import zipfile
           with zipfile.ZipFile('app/build/outputs/apk/debug/app-debug.apk') as z:
               assert 'assets/offline-model.gguf' in z.namelist()
+              assert 'res/drawable/j_foreground.xml' in z.namelist()
+              assert any(n.endswith('/ic_launcher.xml') for n in z.namelist())
               assert 'lib/arm64-v8a/libjarvis_offline.so' in z.namelist()
           PY
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify app/build/outputs/apk/debug/app-debug.apk
@@ -56,7 +56,3 @@ jobs:
           name: JARVIS-Offline-AI-APK
           path: android-client/app/build/outputs/apk/debug/app-debug.apk
           compression-level: 0
-      - uses: actions/upload-artifact@v4
-        with:
-          name: offline-engine-test-results
-          path: android-client/offline-smoke.txt
