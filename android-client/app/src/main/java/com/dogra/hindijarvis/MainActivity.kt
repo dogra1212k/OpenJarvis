@@ -257,19 +257,23 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             return
         }
 
+        val requestBase = url.trimEnd('/')
+        val requestKey = apiKey.text.toString().trim()
+        val requestModel = modelName.text.toString().trim().ifEmpty { "qwen3.5:4b" }
+        val requestHistory = history.takeLast(20).toList()
         setBusy(true, "JARVIS सोच रहा है...")
         executor.execute {
             try {
-                val reply = callOpenJarvis()
-                history.add("assistant" to reply)
+                val reply = callOpenJarvis(requestBase, requestKey, requestModel, requestHistory)
                 runOnUiThread {
+                    history.add("assistant" to reply)
                     appendChat("JARVIS: $reply")
                     setBusy(false, "● ADVANCED AI • Connected")
                     if (speakToggle.isChecked) speak(reply)
                 }
             } catch (e: Exception) {
-                val fallback = handleOffline(text)
                 runOnUiThread {
+                    val fallback = handleOffline(text)
                     appendChat("JARVIS: AI server नहीं मिला। Offline जवाब: $fallback")
                     setBusy(false, "● OFFLINE FALLBACK")
                     if (speakToggle.isChecked) speak(fallback)
@@ -331,8 +335,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun callOpenJarvis(): String {
-        val base = serverUrl.text.toString().trim().trimEnd('/')
+    private fun callOpenJarvis(base: String, key: String, model: String, messagesSnapshot: List<Pair<String, String>>): String {
         require(base.startsWith("http://") || base.startsWith("https://")) {
             "Server URL गलत है"
         }
@@ -342,7 +345,6 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             readTimeout = 60000
             doOutput = true
             setRequestProperty("Content-Type", "application/json")
-            val key = apiKey.text.toString().trim()
             if (key.isNotEmpty()) setRequestProperty("Authorization", "Bearer $key")
         }
 
@@ -351,12 +353,12 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             "content",
             "You are JARVIS, a concise Hindi/Hinglish Android assistant. Reply in the user's language."
         ))
-        history.takeLast(20).forEach { (role, content) ->
+        messagesSnapshot.forEach { (role, content) ->
             messages.put(JSONObject().put("role", role).put("content", content))
         }
 
         val payload = JSONObject()
-            .put("model", modelName.text.toString().trim().ifEmpty { "qwen3.5:4b" })
+            .put("model", model)
             .put("messages", messages)
             .put("temperature", 0.5)
             .put("max_tokens", 1024)
