@@ -12,7 +12,7 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
     defaultConfig {
-        applicationId = "com.dogra.hindijarvis"
+        applicationId = "com.dogra.hindijarvis.offline"
         minSdk = 26
         targetSdk = 35
         versionCode = 3

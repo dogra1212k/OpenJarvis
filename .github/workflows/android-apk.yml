@@ -31,6 +31,8 @@ jobs:
         run: |
           mkdir -p app/src/main/assets
           curl --fail --location --retry 3 --output app/src/main/assets/offline-model.gguf https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_0.gguf
+          curl --fail --location --output app/src/main/assets/Qwen-LICENSE.txt https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/LICENSE
+          curl --fail --location --output app/src/main/assets/llama-LICENSE.txt https://raw.githubusercontent.com/ggml-org/llama.cpp/988190680d5a89fce97de3c20df2c2813731fd61/LICENSE
           echo "7671c0c304e6ce5a7fc577bcb12aba01e2c155cc2efd29b2213c95b18edaf6ed  app/src/main/assets/offline-model.gguf" | sha256sum -c -
       - name: Build and test the actual offline engine
         run: |
