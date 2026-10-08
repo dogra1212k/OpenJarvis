@@ -2,6 +2,8 @@ package com.dogra.hindijarvis
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
+import android.text.InputType
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
@@ -44,6 +46,9 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private var tts: TextToSpeech? = null
     private var recognizer: SpeechRecognizer? = null
     private var localSpeechAvailable = false
+    private var online = false
+    private val cloud = GeminiAi()
+    private lateinit var onlineToggle: CheckBox
     private var ready = false
     private var busy = true
     private var streaming = ""
@@ -66,7 +71,9 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         setContentView(buildUi())
         tts = TextToSpeech(this, this)
         configureSpeech()
-        prepareModel()
+        online = prefs.getBoolean("online", false)
+        onlineToggle.isChecked = online
+        if (online) { ready = true; setBusy(false, "● GEMINI ONLINE") } else prepareModel()
     }
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
@@ -161,10 +168,26 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             isChecked = true
         }
         root.addView(speakToggle)
+        val modes = LinearLayout(this)
+        onlineToggle = CheckBox(this).apply {
+            text = "Gemini Online"; setTextColor(CYAN)
+            setOnCheckedChangeListener { _, checked ->
+                if (!busy) {
+                    online = checked
+                    prefs.edit().putBoolean("online", checked).apply()
+                    history.clear(); streaming = ""; renderChat()
+                    if (checked) { ready = true; setBusy(false, "● GEMINI ONLINE") }
+                    else prepareModel()
+                }
+            }
+        }
+        modes.addView(onlineToggle, LinearLayout.LayoutParams(0, -2, 1f))
+        modes.addView(Button(this).apply { text = "AI settings"; setOnClickListener { if (!busy) aiSettings() } })
+        root.addView(modes)
         val row = LinearLayout(this)
         mic = Button(this).apply { text = "MIC"; setOnClickListener { startListening() } }
         send = Button(this).apply { text = "भेजें"; setOnClickListener { sendMessage() } }
-        stop = Button(this).apply { text = "रोकें"; setOnClickListener { ai?.setCancelled(true) } }
+        stop = Button(this).apply { text = "रोकें"; setOnClickListener { ai?.setCancelled(true); cloud.cancel() } }
         clear = Button(this).apply {
             text = "नई चैट"
             setOnClickListener { history.clear(); streaming = ""; renderChat() }
@@ -186,7 +209,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         }
         root.addView(row)
         root.addView(TextView(this).apply {
-            text = "OFFLINE • छोटे मॉडल की हिन्दी सीमित है"
+            text = "Online: बातचीत Google को भेजी जाएगी • Offline: फोन पर AI"
             textSize = 10f
             setTextColor(MUTED)
             gravity = Gravity.CENTER
@@ -209,6 +232,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     private fun setBusy(value: Boolean, message: String) {
         busy = value
+        onlineToggle.isEnabled = !value
         status.text = message
         send.isEnabled = ready && !value
         input.isEnabled = ready && !value
@@ -278,7 +302,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private fun renderChat() {
         chatContent.removeAllViews()
         if (history.isEmpty()) {
-            chat.text = "नमस्ते, मैं JARVIS हूँ।\n\nसवाल पूछिए, कोई idea समझिए या नई बातचीत शुरू कीजिए।\n\nछोटा offline मॉडल • शुरुआत English में करें।\nकोई server URL या API key नहीं चाहिए।"
+            chat.text = if (online) "नमस्ते, मैं JARVIS हूँ।\n\nAI settings में Gemini key save करें, फिर हिन्दी में पूछिए। Server URL नहीं चाहिए।" else "नमस्ते, मैं JARVIS हूँ।\n\nOffline AI • छोटे मॉडल की हिन्दी सीमित है।"
             chatContent.addView(chat)
         }
         history.forEach { (role, text) -> addBubble(role, text) }
@@ -335,6 +359,24 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             speak(command)
             return
         }
+        if (online) {
+            val key = runCatching { KeyStore(this).read() }.getOrDefault("")
+            if (key.isBlank()) { history.removeAt(history.lastIndex); input.setText(message); renderChat(); aiSettings(); return }
+            val snapshot = history.takeLast(20).toList()
+            val model = prefs.getString("gemini_model", "gemini-3.8-flash")!!
+            setBusy(true, "● Gemini जवाब तैयार कर रहा है…")
+            worker.execute {
+                val result = runCatching { cloud.reply(key, model, snapshot) }
+                ui {
+                    val answer = result.getOrElse { "Online error: ${it.message}" }
+                    history.add("assistant" to answer)
+                    while (history.size > 20) history.removeAt(0)
+                    renderChat(); setBusy(false, "● GEMINI ONLINE")
+                    if (result.isSuccess) speak(answer)
+                }
+            }
+            return
+        }
         val prompt = buildString {
             append("<|im_start|>system\nYou are JARVIS, a helpful assistant. Reply briefly in the user's language. If unsure, say so. You are running offline and have no live internet information.<|im_end|>\n")
             history.takeLast(5).forEach { (role, text) ->
@@ -369,6 +411,27 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 }
             }
         }
+    }
+
+    private fun aiSettings() {
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), 0) }
+        val key = EditText(this).apply { hint = "Gemini API key"; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD }
+        val model = EditText(this).apply { hint = "Model"; setText(prefs.getString("gemini_model", "gemini-3.8-flash")) }
+        box.addView(TextView(this).apply { text = "Key खाली छोड़ने पर saved key रहेगी। Online chat Google को भेजी जाती है।" })
+        box.addView(key); box.addView(model)
+        AlertDialog.Builder(this).setTitle("Gemini AI settings").setView(box)
+            .setNegativeButton("रद्द", null)
+            .setNeutralButton("Key हटाएँ") { _, _ -> KeyStore(this).remove(); status.text = "Key हटा दी गई" }
+            .setPositiveButton("Save") { _, _ ->
+                runCatching {
+                    val name = model.text.toString().trim()
+                    require(name.matches(Regex("[A-Za-z0-9._-]+"))) { "Model नाम सही डालें" }
+                    val value = key.text.toString().trim()
+                    if (value.isNotEmpty()) KeyStore(this).save(value)
+                    prefs.edit().putString("gemini_model", name).apply()
+                }.onSuccess { status.text = "Settings saved • Gemini Online चुनें" }
+                    .onFailure { status.text = "Settings save नहीं हुई: ${it.message}" }
+            }.show()
     }
 
     private fun phoneCommand(raw: String): String? {
@@ -452,6 +515,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
     override fun onDestroy() {
         ai?.setCancelled(true)
+        cloud.cancel()
         recognizer?.destroy()
         tts?.stop()
         tts?.shutdown()

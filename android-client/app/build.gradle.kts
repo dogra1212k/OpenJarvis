@@ -15,8 +15,8 @@ android {
         applicationId = "com.dogra.hindijarvis.offline"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "2.1.0-design"
+        versionCode = 5
+        versionName = "2.2.0-online"
         ndk { abiFilters += "arm64-v8a" }
         externalNativeBuild { cmake { cppFlags += "-std=c++17" } }
     }

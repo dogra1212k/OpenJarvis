@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Offline chat itself has no network permission. -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <queries>
         <package android:name="com.google.android.youtube" />
@@ -8,7 +8,7 @@
         <intent><action android:name="android.speech.RecognitionService" /></intent>
         <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>
     </queries>
-    <application android:allowBackup="false" android:label="JARVIS Offline AI" android:theme="@style/AppTheme"
+    <application android:allowBackup="false" android:label="JARVIS AI" android:theme="@style/AppTheme"
         android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher">
         <activity android:name=".MainActivity" android:exported="true"
             android:configChanges="orientation|screenSize|keyboardHidden" android:windowSoftInputMode="adjustResize">
